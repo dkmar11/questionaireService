@@ -1,0 +1,44 @@
+version: '3.3'
+
+networks:
+  app-tier:
+    driver: bridge
+
+services:
+  Db:
+    image: mysql:latest
+
+    depends_on:
+      - questionnaire
+    ports: 
+      - "33060:3306"
+    expose: 
+      - "33060"
+    restart: always 
+    environment: 
+      MYSQL_ROOT_PASSWORD: "at20123"
+      MYSQL_HOST: "at20_questionnaire_service-Db-1"
+      MYSQL_PORT: "3306"
+    volumes:
+      - ./src/services/DB/questionnairedb.sql:/docker-entrypoint-initdb.d/questionnairedb.sql
+    networks:
+      - app-tier 
+
+  questionnaire:
+    image: dkmar11/questionnaire:${TAG_VERSION}
+    ports:
+      - "8821:8820"
+    expose: 
+      - "8820"
+    restart: always 
+    environment:
+      PORT: "8820"
+      PINO_LOG_LEVEL: "info"
+      MYSQL_ROOT_PASSWORD: "at20123"
+      DATABASE_NAME: "questionnairedb"
+      HOST_DATA_BASE: "Db"
+      USER_DATA_BASE: "root"
+      DB_PORT: "3306"
+    networks:
+      - app-tier
+

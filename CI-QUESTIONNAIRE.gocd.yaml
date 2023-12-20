@@ -1,0 +1,150 @@
+format_version: 10
+pipelines:
+  CI-QUESTIONNAIRE:
+    group: AT20-israel
+    label_template: ${COUNT}
+    lock_behavior: none
+    display_order: -1
+    environment_variables:
+      TAG_VERSION: 1.2
+      ORG_KEY: devops-questionary
+      PROJECT_KEY: devops-questionary_devops
+      USER_DOCKER: dkmar11
+    secure_variables:
+      SONAR_TOKEN: AES:iEh8xxSMDSY46Ub4zSUBxw==:TeKUngHXaGYQZo4TAcgbEzrXkGHEilZO9YXIx3OeyMfwaAHDpM7GGc4AF4uUokPy
+      DOCKER_PASS: AES:veKIrQ8LQ+niy1fghP66jA==:ZISLmJSx20oR/mA6qWS6JA==
+    materials:
+      git-1def632:
+        git: https://github.com/AT20-DevOps/AT20_QUESTIONNAIRE_SERVICE.git
+        shallow_clone: false
+        auto_update: true
+        branch: task-12-israel
+    stages:
+    - test:
+        fetch_materials: true
+        keep_artifacts: false
+        clean_workspace: false
+        approval:
+          type: success
+          allow_only_on_success: false
+        jobs:
+          unitest:
+            timeout: 0
+            resources: 
+            - node
+            tasks:
+            - script: |
+                npm install
+                npm test
+            artifacts:
+            - test:
+                source: tests/test-results/*.xml
+                destination: xml_report
+            - build:
+                source: tests/test-results/
+                destination: html_report
+    - Code_inspection:
+        fetch_materials: false
+        keep_artifacts: false
+        clean_workspace: false
+        approval:
+          type: success
+          allow_only_on_success: false
+        jobs:
+          Sonar_scaner:
+            timeout: 15
+            resources: 
+            - node
+            tasks:
+            - fetch:
+                is_file: false
+                source: ./
+                stage: test
+                job: unitest
+                run_if: passed
+            - script: |
+                /godata/.sonar/sonar-scanner-4.7.0.2747-linux/bin/sonar-scanner \
+                      -Dsonar.organization=${ORG_KEY} \
+                      -Dsonar.projectKey=${PROJECT_KEY} \
+                      -Dsonar.sources=. \
+                      -Dsonar.host.url=https://sonarcloud.io
+    - PackageAndPublish:
+        fetch_materials: false
+        keep_artifacts: false
+        clean_workspace: false
+        approval:
+          type: success
+          allow_only_on_success: false
+        jobs:
+          docker:
+            timeout: 0
+            resources:
+            - docker
+            tasks:
+            - fetch:
+                is_file: false
+                source: ./
+                stage: test
+                job: unitest
+                run_if: passed
+            - script: |
+                ls -la
+                docker build -t at20_questionnaire_service .
+                docker login -u ${USER_DOCKER} -p ${DOCKER_PASS}
+                docker tag at20_questionnaire_service ${USER_DOCKER}/questionnaire:${TAG_VERSION}
+                docker push ${USER_DOCKER}/questionnaire:${TAG_VERSION}
+            artifacts:
+            - build:
+                source: docker-compose-israel.yaml
+
+  Acceptance:
+    group: AT20-israel
+    label_template: ${COUNT}
+    lock_behavior: none
+    display_order: -1
+    environment_variables:
+      GIT_COMMIT_HASH: 1.2
+    materials:
+      CI-QUESTIONNAIRE:
+        pipeline: CI-QUESTIONNAIRE
+        stage: PackageAndPublish
+    stages:
+    - DeployToDev:
+        fetch_materials: false
+        keep_artifacts: false
+        clean_workspace: false
+        approval:
+          type: success
+          allow_only_on_success: false
+        jobs:
+          deployToDev:
+            timeout: 0
+            resources:
+            - docker
+            tasks:
+            - fetch:
+                pipeline: CI-QUESTIONNAIRE
+                stage: PackageAndPublish
+                job: docker
+                source: docker-compose-israel.yaml
+                is_file: true
+                run_if: passed
+            - script: |
+                ls -la
+                echo deploy here
+                export TAG_VERSION=${GIT_COMMIT_HASH} && docker-compose -f docker-compose-israel.yaml up -d 
+    - Smoke:
+        fetch_materials: false
+        keep_artifacts: false
+        clean_workspace: false
+        approval:
+          type: success
+          allow_only_on_success: false
+        jobs:
+          test:
+            timeout: 0
+            resources:
+            - docker
+            tasks:
+            - script: |
+                echo command to run smoke test
