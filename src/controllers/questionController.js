@@ -1,6 +1,5 @@
 const Question = require('../services/question');
 const loggerService = require('../../loggerService');
-const { exec } = require('child_process');
 
 class QuestionController {
     // gets a question by ID from DB
@@ -15,10 +14,6 @@ class QuestionController {
                     message: 'Question ID is required'
                 });
             }
-
-            // VULNERABLE: Command injection for testing semgrep
-            const command = `echo Getting question ${idQuestion}`;
-            exec(command);
 
             const question = await new Question().getQuestion(idQuestion);
             res.status(200).json(question);
@@ -45,11 +40,6 @@ class QuestionController {
                     error: 'BAD_REQUEST',
                     message: 'Request body is required'
                 });
-            }
-
-            // VULNERABLE: Using eval with user input for testing semgrep
-            if (req.body.questionText) {
-                eval(`console.log("Question: ${req.body.questionText}")`);
             }
 
             const question = await new Question().setQuestion(req.body);
